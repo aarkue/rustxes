@@ -12,6 +12,9 @@ use crate::event_log_struct::{
     AttributeAddable, AttributeValue, Attributes, Event, EventLog, Trace,
 };
 
+///
+/// Current Parsing Mode (i.e., which tag is currently open / being parsed)
+/// 
 #[derive(Clone, Copy, Debug)]
 enum Mode {
     Trace,
@@ -19,6 +22,9 @@ enum Mode {
     None,
 }
 
+///
+/// Parse an attribute from a tag (reading the "key" and "value" fields) and parsing the inner value
+/// 
 fn add_attribute_from_tag(t: &BytesStart, mode: Mode, log: &mut EventLog) {
     let mut value = String::new();
     let mut key = String::new();
@@ -90,6 +96,9 @@ fn add_attribute_from_tag(t: &BytesStart, mode: Mode, log: &mut EventLog) {
     }
 }
 
+/// 
+/// Import an XES [EventLog] from a [Reader] 
+/// 
 pub fn import_xes<T>(reader: &mut Reader<T>) -> EventLog
 where
     T: BufRead,
@@ -140,6 +149,11 @@ where
     return log;
 }
 
+
+
+/// 
+/// Import an XES [EventLog] from a file path 
+/// 
 pub fn import_xes_file(path: &str) -> EventLog {
     if path.ends_with(".gz") {
         let file = File::open(path).unwrap();
@@ -155,6 +169,9 @@ pub fn import_xes_file(path: &str) -> EventLog {
     }
 }
 
+/// 
+/// Import an XES [EventLog] directly from a string
+/// 
 pub fn import_xes_str(xes_str: &str) -> EventLog {
     let mut reader: Reader<&[u8]> = Reader::from_str(&xes_str);
     return import_xes(&mut reader);

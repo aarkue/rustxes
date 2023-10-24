@@ -12,8 +12,18 @@ use rayon::prelude::{IntoParallelRefIterator, ParallelIterator};
 pub mod event_log_struct;
 pub mod xes_import;
 
+/// 
+/// Prefix to attribute keys for trace-level attributes (e.g., when "flattening" the log to a [DataFrame])
+/// 
 pub const TRACE_PREFIX: &str = "case:";
 
+/// 
+/// Convert a attribute ([Attribute]) to an [AnyValue]
+/// 
+/// Used for converting values and data types to the DataFrame equivalent
+/// 
+/// The UTC timezone argument is used to correctly convert to AnyValue::Datetime with UTC timezone
+/// 
 fn attribute_to_any_value<'a>(
     from_option: Option<&Attribute>,
     utc_tz: &'a Option<String>,
@@ -27,6 +37,13 @@ fn attribute_to_any_value<'a>(
     }
 }
 
+/// 
+/// Convert a attribute ([AttributeValue]) to an [AnyValue]
+/// 
+/// Used for converting values and data types to the DataFrame equivalent 
+/// 
+/// The UTC timezone argument is used to correctly convert to AnyValue::Datetime with UTC timezone 
+/// 
 fn attribute_value_to_any_value<'a>(
     from: &AttributeValue,
     utc_tz: &'a Option<String>,
@@ -53,7 +70,11 @@ fn attribute_value_to_any_value<'a>(
         AttributeValue::None() => AnyValue::Null,
     }
 }
-
+///
+/// Convert an [EventLog] to a Polars [DataFrame]
+/// 
+/// Flattens event log and adds trace-level attributes to events with prefixed attribute key (see [TRACE_PREFIX])
+/// 
 fn convert_log_to_df(log: &EventLog) -> Result<DataFrame, PolarsError> {
     println!("Starting converting log to DataFrame");
     let mut now = Instant::now();

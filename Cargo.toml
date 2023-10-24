@@ -15,5 +15,5 @@ chrono = {version = "0.4.29" }
 uuid = {version = "1.4.1", features = ["v4"]}
 quick-xml = "0.30.0"
 flate2 = "1.0"
-polars = {version = "0.32.1", features = ["docs", "zip_with", "csv", "json", "temporal", "timezones", "fmt", "dtype-slim", "rows", "partition_by"]}
+polars = {version = "0.32.1", features = ["dtype-slim"]}
 pyo3-polars = "0.6.0"
