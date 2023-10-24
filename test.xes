@@ -2,8 +2,7 @@
 <log xes.version="2.0" xes.features="arbitrary-depth"
   xmlns="http://www.xes-standard.org
 /">
-  <extension name="Concept" prefix="concept" uri="http://www.xes-standard.org/concept.
-xesext" />
+  <extension name="Concept" prefix="concept" uri="http://www.xes-standard.org/concept.xesext" />
   <extension name="Time" prefix="time" uri="http://www.xes-standard.org/time.xesext" />
   <global scope="trace">
     <string key="concept:name" value="" />
@@ -45,6 +44,16 @@ xesext" />
           <string key="pretended to try hard" value="maybe"/>
         </boolean>
       </int>
+        <list key="revisions">
+          <string key="name" value="XES standard" />
+          <boolean key="stable" value="true" />
+          <string key="revision" value="2.0" />
+          <string key="revision" value="1.4" />
+          <string key="revision" value="1.3" />
+          <string key="revision" value="1.2" />
+          <string key="revision" value="1.1" />
+          <string key="revision" value="1.0" />
+        </list>
     </event>
     <event>
       <string key="concept:name" value="Mail rejection" />
