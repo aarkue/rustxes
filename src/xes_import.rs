@@ -2,7 +2,6 @@ use std::fs::File;
 use std::io::{BufRead, BufReader, Read};
 use std::str::FromStr;
 
-
 use chrono::DateTime;
 use flate2::bufread::GzDecoder;
 use quick_xml::events::BytesStart;
@@ -49,12 +48,15 @@ fn add_attribute_from_tag(t: &BytesStart, mode: Mode, log: &mut EventLog) {
                 Mode::None => {
                     // We do not parse any log-level attributes etc.
                     None
-                },
+                }
                 m => {
                     let mut name_str = String::new();
                     t.name().as_ref().read_to_string(&mut name_str).unwrap();
                     // TODO: Implement other attribute value types
-                    println!("Attribute type not implemented yet! {} in mode {:?}", name_str, m);
+                    eprintln!(
+                        "Attribute type not implemented {} in mode {:?}",
+                        name_str, m
+                    );
                     None
                 }
             }
@@ -123,11 +125,15 @@ where
                         add_attribute_from_tag(&t, current_mode, &mut log);
                     }
                 },
-                quick_xml::events::Event::Empty(t) => add_attribute_from_tag(&t, current_mode, &mut log),
+                quick_xml::events::Event::Empty(t) => {
+                    add_attribute_from_tag(&t, current_mode, &mut log)
+                }
                 quick_xml::events::Event::Eof => break,
                 _ => {}
             },
-            Err(_) => todo!(),
+            Err(e) => {
+                eprintln!("[Rust] Error occured when parsing XES: {:?}", e);
+            }
         }
     }
     buf.clear();
@@ -143,7 +149,7 @@ pub fn import_xes_file(path: &str) -> EventLog {
         dec.read_to_string(&mut s).unwrap();
         let mut reader: Reader<&[u8]> = Reader::from_str(&s);
         return import_xes(&mut reader);
-    }else {
+    } else {
         let mut reader: Reader<BufReader<std::fs::File>> = Reader::from_file(path).unwrap();
         return import_xes(&mut reader);
     }

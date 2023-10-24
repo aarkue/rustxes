@@ -1,8 +1,10 @@
-use std::{time::Instant, collections::HashSet};
+use std::{collections::HashSet, time::Instant};
 
-use chrono::{NaiveDateTime, DateTime, Utc};
 use event_log_struct::{Attribute, AttributeValue, EventLog};
-use polars::{prelude::{DataFrame, AnyValue, PolarsError, NamedFrom}, series::Series};
+use polars::{
+    prelude::{AnyValue, DataFrame, NamedFrom, PolarsError},
+    series::Series,
+};
 use pyo3::prelude::*;
 use pyo3_polars::PyDataFrame;
 use rayon::prelude::{IntoParallelRefIterator, ParallelIterator};
@@ -10,10 +12,12 @@ use rayon::prelude::{IntoParallelRefIterator, ParallelIterator};
 pub mod event_log_struct;
 pub mod xes_import;
 
-
 pub const TRACE_PREFIX: &str = "case:";
 
-fn attribute_to_any_value<'a>(from_option: Option<&Attribute>, utc_tz: &'a Option<String>) -> AnyValue<'a> {
+fn attribute_to_any_value<'a>(
+    from_option: Option<&Attribute>,
+    utc_tz: &'a Option<String>,
+) -> AnyValue<'a> {
     match from_option {
         Some(from) => {
             let x = attribute_value_to_any_value(&from.value, utc_tz);
@@ -23,16 +27,19 @@ fn attribute_to_any_value<'a>(from_option: Option<&Attribute>, utc_tz: &'a Optio
     }
 }
 
-
-fn attribute_value_to_any_value<'a>(from: &AttributeValue, utc_tz: &'a Option<String>) -> AnyValue<'a> {
+fn attribute_value_to_any_value<'a>(
+    from: &AttributeValue,
+    utc_tz: &'a Option<String>,
+) -> AnyValue<'a> {
     match from {
         AttributeValue::String(v) => AnyValue::Utf8Owned(v.into()),
         AttributeValue::Date(v) => {
             return AnyValue::Datetime(
-            v.timestamp_nanos(),
-            polars::prelude::TimeUnit::Nanoseconds,
-            utc_tz)
-    },
+                v.timestamp_nanos_opt().unwrap(),
+                polars::prelude::TimeUnit::Nanoseconds,
+                utc_tz,
+            )
+        }
         AttributeValue::Int(v) => AnyValue::Int64(*v),
         AttributeValue::Float(v) => AnyValue::Float64(*v),
         AttributeValue::Boolean(v) => AnyValue::Boolean(*v),
@@ -40,36 +47,10 @@ fn attribute_value_to_any_value<'a>(from: &AttributeValue, utc_tz: &'a Option<St
             let s = v.to_string();
             AnyValue::Utf8Owned(s.into())
         }
-        AttributeValue::List(_) => todo!(),
-        AttributeValue::Container(_) => todo!(),
+        // TODO: Add proper List/Container support
+        AttributeValue::List(l) => AnyValue::Utf8Owned(format!("{:?}",l).into()),
+        AttributeValue::Container(c) =>  AnyValue::Utf8Owned(format!("{:?}",c).into()),
         AttributeValue::None() => AnyValue::Null,
-    }
-}
-
-fn any_value_to_attribute_value(from: &AnyValue) -> AttributeValue {
-    match from {
-        AnyValue::Null => AttributeValue::None(),
-        AnyValue::Boolean(v) => AttributeValue::Boolean(*v),
-        AnyValue::Utf8(v) => AttributeValue::String(v.to_string()),
-        AnyValue::UInt8(v) => AttributeValue::Int((*v).into()),
-        AnyValue::UInt16(v) => AttributeValue::Int((*v).into()),
-        AnyValue::UInt32(v) => AttributeValue::Int((*v).into()),
-        // // AnyValue::UInt64(v) => AttributeValue::Int((*v).into()),
-        AnyValue::Int8(v) => AttributeValue::Int((*v).into()),
-        AnyValue::Int16(v) => AttributeValue::Int((*v).into()),
-        AnyValue::Int32(v) => AttributeValue::Int((*v).into()),
-        AnyValue::Int64(v) => AttributeValue::Int((*v).into()),
-        AnyValue::Float32(v) => AttributeValue::Float((*v).into()),
-        AnyValue::Float64(v) => AttributeValue::Float((*v).into()),
-        AnyValue::Datetime(ns, _, _) => {
-            // Convert nanos to micros; tz is not used!
-            let d: DateTime<Utc> = NaiveDateTime::from_timestamp_micros(ns / 1000)
-                .unwrap()
-                .and_utc();
-            AttributeValue::Date(d)
-        }
-        AnyValue::Utf8Owned(v) => AttributeValue::String(v.to_string()),
-        x => AttributeValue::String(format!("{:?}", x)),
     }
 }
 
@@ -99,11 +80,14 @@ fn convert_log_to_df(log: &EventLog) -> Result<DataFrame, PolarsError> {
                 .map(|t| -> Vec<AnyValue> {
                     if k.starts_with(TRACE_PREFIX) {
                         let trace_k: String = k.chars().skip(TRACE_PREFIX.len()).collect();
-                        vec![attribute_to_any_value(t.attributes.get(&trace_k),&utc_tz); t.events.len()]
+                        vec![
+                            attribute_to_any_value(t.attributes.get(&trace_k), &utc_tz);
+                            t.events.len()
+                        ]
                     } else {
                         t.events
                             .iter()
-                            .map(|e| attribute_to_any_value(e.attributes.get(k),&utc_tz))
+                            .map(|e| attribute_to_any_value(e.attributes.get(k), &utc_tz))
                             .collect()
                     }
                 })
@@ -139,7 +123,7 @@ fn import_xes_rs(path: String) -> PyResult<PyDataFrame> {
     Ok(PyDataFrame(converted_log))
 }
 
-/// A Python module implemented in Rust.
+/// Python Module
 #[pymodule]
 fn rustxes(_py: Python, m: &PyModule) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(import_xes_rs, m)?)?;
