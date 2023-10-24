@@ -1,5 +1,5 @@
-from .rustxes import sum_as_string
+from .rustxes import import_xes_rs
 
 
 def import_xes(path: str):
-    return sum_as_string(4, 4)
+    return import_xes_rs(path)
