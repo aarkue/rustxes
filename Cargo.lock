@@ -225,6 +225,7 @@ dependencies = [
  "iana-time-zone",
  "js-sys",
  "num-traits",
+ "serde",
  "wasm-bindgen",
  "windows-targets",
 ]
@@ -1349,6 +1350,8 @@ dependencies = [
  "pyo3-polars",
  "quick-xml",
  "rayon",
+ "serde",
+ "serde_json",
  "uuid",
 ]
 
@@ -1590,6 +1593,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "88ad59a7560b41a70d191093a945f0b87bc1deeda46fb237479708a1d6b6cdfc"
 dependencies = [
  "getrandom",
+ "serde",
 ]
 
 [[package]]

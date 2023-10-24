@@ -8,22 +8,25 @@ use polars::{
 use pyo3::prelude::*;
 use pyo3_polars::PyDataFrame;
 use rayon::prelude::{IntoParallelRefIterator, ParallelIterator};
+use serde::{Deserialize, Serialize};
+
+use crate::event_log_struct::{Attributes, EventLogClassifier, EventLogExtension};
 
 pub mod event_log_struct;
+mod test;
 pub mod xes_import;
-
-/// 
+///
 /// Prefix to attribute keys for trace-level attributes (e.g., when "flattening" the log to a [DataFrame])
-/// 
+///
 pub const TRACE_PREFIX: &str = "case:";
 
-/// 
+///
 /// Convert a attribute ([Attribute]) to an [AnyValue]
-/// 
+///
 /// Used for converting values and data types to the DataFrame equivalent
-/// 
+///
 /// The UTC timezone argument is used to correctly convert to AnyValue::Datetime with UTC timezone
-/// 
+///
 fn attribute_to_any_value<'a>(
     from_option: Option<&Attribute>,
     utc_tz: &'a Option<String>,
@@ -37,13 +40,13 @@ fn attribute_to_any_value<'a>(
     }
 }
 
-/// 
+///
 /// Convert a attribute ([AttributeValue]) to an [AnyValue]
-/// 
-/// Used for converting values and data types to the DataFrame equivalent 
-/// 
-/// The UTC timezone argument is used to correctly convert to AnyValue::Datetime with UTC timezone 
-/// 
+///
+/// Used for converting values and data types to the DataFrame equivalent
+///
+/// The UTC timezone argument is used to correctly convert to AnyValue::Datetime with UTC timezone
+///
 fn attribute_value_to_any_value<'a>(
     from: &AttributeValue,
     utc_tz: &'a Option<String>,
@@ -65,16 +68,16 @@ fn attribute_value_to_any_value<'a>(
             AnyValue::Utf8Owned(s.into())
         }
         // TODO: Add proper List/Container support
-        AttributeValue::List(l) => AnyValue::Utf8Owned(format!("{:?}",l).into()),
-        AttributeValue::Container(c) =>  AnyValue::Utf8Owned(format!("{:?}",c).into()),
+        AttributeValue::List(l) => AnyValue::Utf8Owned(format!("{:?}", l).into()),
+        AttributeValue::Container(c) => AnyValue::Utf8Owned(format!("{:?}", c).into()),
         AttributeValue::None() => AnyValue::Null,
     }
 }
 ///
 /// Convert an [EventLog] to a Polars [DataFrame]
-/// 
+///
 /// Flattens event log and adds trace-level attributes to events with prefixed attribute key (see [TRACE_PREFIX])
-/// 
+///
 fn convert_log_to_df(log: &EventLog) -> Result<DataFrame, PolarsError> {
     println!("Starting converting log to DataFrame");
     let mut now = Instant::now();
@@ -131,8 +134,13 @@ fn convert_log_to_df(log: &EventLog) -> Result<DataFrame, PolarsError> {
     return Ok(df);
 }
 
+///
+/// Import a XES event log
+/// 
+/// Returns a tuple of a Polars [DataFrame] for the event data and a json-encoding of  all log attributes/extensions/classifiers 
+/// 
 #[pyfunction]
-fn import_xes_rs(path: String) -> PyResult<PyDataFrame> {
+fn import_xes_rs(path: String) -> PyResult<(PyDataFrame, String)> {
     println!("Starting XES Import");
     let mut now = Instant::now();
     let log = xes_import::import_xes_file(&path);
@@ -141,7 +149,21 @@ fn import_xes_rs(path: String) -> PyResult<PyDataFrame> {
     // add_start_end_acts(&mut log);
     let converted_log = convert_log_to_df(&log).unwrap();
     println!("Finished Converting Log; Took {:.2?}", now.elapsed());
-    Ok(PyDataFrame(converted_log))
+    #[derive(Debug, Serialize, Deserialize)]
+    struct OtherLogData {
+        pub attributes: Attributes,
+        pub extensions: Option<Vec<EventLogExtension>>,
+        pub classifiers: Option<Vec<EventLogClassifier>>,
+    }
+    let other_data = OtherLogData {
+        attributes: log.attributes,
+        extensions: log.extensions,
+        classifiers: log.classifiers,
+    };
+    Ok((
+        PyDataFrame(converted_log),
+        serde_json::to_string(&other_data).unwrap(),
+    ))
 }
 
 /// Python Module
