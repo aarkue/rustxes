@@ -7,6 +7,7 @@ use polars::{
 };
 use pyo3::prelude::*;
 use pyo3_polars::PyDataFrame;
+use quick_xml::escape::unescape;
 use rayon::prelude::{IntoParallelRefIterator, ParallelIterator};
 use serde::{Deserialize, Serialize};
 
@@ -52,7 +53,7 @@ fn attribute_value_to_any_value<'a>(
     utc_tz: &'a Option<String>,
 ) -> AnyValue<'a> {
     match from {
-        AttributeValue::String(v) => AnyValue::Utf8Owned(v.into()),
+        AttributeValue::String(v) => AnyValue::Utf8Owned(unescape(v.as_str()).unwrap().into()),
         AttributeValue::Date(v) => {
             return AnyValue::Datetime(
                 v.timestamp_nanos_opt().unwrap(),
