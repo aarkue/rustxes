@@ -82,17 +82,29 @@ fn attribute_value_to_any_value<'a>(
 fn convert_log_to_df(log: &EventLog) -> Result<DataFrame, PolarsError> {
     println!("Starting converting log to DataFrame");
     let mut now = Instant::now();
-    let mut all_attributes: HashSet<String> = HashSet::new();
-    log.traces.iter().for_each(|t| {
-        t.attributes.keys().for_each(|s| {
-            all_attributes.insert(TRACE_PREFIX.to_string() + s.as_str());
-        });
-        t.events.iter().for_each(|e| {
-            e.attributes.keys().for_each(|s| {
-                all_attributes.insert(s.into());
-            });
+    let all_attributes: HashSet<String> = log
+        .traces
+        .par_iter()
+        .flat_map(|t| {
+            let trace_attrs: HashSet<String> = t
+                .attributes
+                .keys()
+                .map(|k| TRACE_PREFIX.to_string() + k.as_str())
+                .collect();
+            let m: HashSet<String> = t
+                .events
+                .iter()
+                .flat_map(|e| {
+                    e.attributes
+                        .keys()
+                        .map(|k| k.clone())
+                        .collect::<Vec<String>>()
+                })
+                .collect();
+            return [trace_attrs, m];
         })
-    });
+        .flatten()
+        .collect();
     println!("Gathering all attributes took {:.2?}", now.elapsed());
     let utc_tz = Some("UTC".to_string());
     now = Instant::now();
