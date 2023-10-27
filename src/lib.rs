@@ -2,7 +2,7 @@ use std::{collections::HashSet, time::Instant};
 
 use event_log_struct::{Attribute, AttributeValue, EventLog};
 use polars::{
-    prelude::{AnyValue, DataFrame, NamedFrom, PolarsError},
+    prelude::{AnyValue, DataFrame, DataType, NamedFrom, PolarsError},
     series::Series,
 };
 use pyo3::prelude::*;
@@ -181,12 +181,13 @@ fn convert_log_to_df(log: &EventLog) -> Result<DataFrame, PolarsError> {
 
 ///
 /// Import a XES event log
-/// 
-/// Returns a tuple of a Polars [DataFrame] for the event data and a json-encoding of  all log attributes/extensions/classifiers 
-/// 
+///
+/// Returns a tuple of a Polars [DataFrame] for the event data and a json-encoding of  all log attributes/extensions/classifiers
+///
 #[pyfunction]
 fn import_xes_rs(path: String) -> PyResult<(PyDataFrame, String)> {
     println!("Starting XES Import");
+    let start_now = Instant::now();
     let mut now = Instant::now();
     let log = xes_import::import_xes_file(&path);
     println!("Importing XES Log took {:.2?}", now.elapsed());
@@ -205,6 +206,7 @@ fn import_xes_rs(path: String) -> PyResult<(PyDataFrame, String)> {
         extensions: log.extensions,
         classifiers: log.classifiers,
     };
+    println!("Total duration: {:.2?}", start_now.elapsed());
     Ok((
         PyDataFrame(converted_log),
         serde_json::to_string(&other_data).unwrap(),
