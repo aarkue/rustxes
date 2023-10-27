@@ -104,7 +104,6 @@ fn parse_attribute_from_tag(t: &BytesStart, mode: Mode) -> (String, AttributeVal
         _ => {
             match mode {
                 Mode::None => {
-                    // We do not parse any log-level attributes etc.
                     None
                 }
                 m => {
@@ -133,23 +132,36 @@ fn add_attribute_from_tag(
 ) {
     let (key, val) = parse_attribute_from_tag(t, mode);
     match mode {
-        Mode::Trace => {
-            log.traces
-                .last_mut()
-                .unwrap()
-                .attributes
-                .add_to_attributes(key, val);
-        }
-        Mode::Event => {
-            log.traces
-                .last_mut()
-                .unwrap()
-                .events
-                .last_mut()
-                .unwrap()
-                .attributes
-                .add_to_attributes(key, val);
-        }
+        Mode::Trace => match log.traces.last_mut() {
+            Some(t) => {
+                t.attributes.add_to_attributes(key, val);
+            }
+            None => {
+                eprintln!(
+                    "No current trace when parsing trace attribute: Key {:?}, Value {:?}",
+                    key, val
+                );
+            }
+        },
+        Mode::Event => match log.traces.last_mut() {
+            Some(t) => match t.events.last_mut() {
+                Some(e) => {
+                    e.attributes.add_to_attributes(key, val);
+                }
+                None => {
+                    eprintln!(
+                        "No current event when parsing event attribute: Key {:?}, Value {:?}",
+                        key, val
+                    )
+                }
+            },
+            None => {
+                eprintln!(
+                    "No current trace when parsing event attribute: Key {:?}, Value {:?}",
+                    key, val
+                );
+            }
+        },
 
         Mode::None => {
             log.attributes.add_to_attributes(key, val);
@@ -218,12 +230,25 @@ where
                         }
                         b"event" => {
                             current_mode = Mode::Event;
-                            log.traces.last_mut().unwrap().events.push(Event {
-                                attributes: Attributes::new(),
-                            });
+                            match log.traces.last_mut() {
+                                Some(t) => {
+                                    t.events.push(Event {
+                                        attributes: Attributes::new(),
+                                    });
+                                }
+                                None => {
+                                    eprintln!("Invalid XES format: Event without trace")
+                                }
+                            }
                         }
                         b"global" => {
-                            last_mode_before_attr = current_mode;
+                            match current_mode {
+                                Mode::Global => {}
+                                Mode::Attribute => {}
+                                m => {
+                                    last_mode_before_attr = m;
+                                }
+                            }
                             current_mode = Mode::Global;
                         }
                         x => {
@@ -239,7 +264,8 @@ where
                                             own_attributes: Some(Attributes::new()),
                                         });
                                         match current_mode {
-                                            Mode::Attribute => {}
+                                            Mode::Attribute => {},
+                                            Mode::Global => {},
                                             m => {
                                                 last_mode_before_attr = m;
                                             }
