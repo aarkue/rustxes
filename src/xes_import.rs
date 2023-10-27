@@ -3,7 +3,7 @@ use std::fs::File;
 use std::io::{BufRead, BufReader, Read};
 use std::str::FromStr;
 
-use chrono::DateTime;
+use chrono::{DateTime, NaiveDateTime, Utc};
 use flate2::bufread::GzDecoder;
 use quick_xml::events::BytesStart;
 use quick_xml::Reader;
@@ -43,13 +43,62 @@ fn parse_attribute_from_tag(t: &BytesStart, mode: Mode) -> (String, AttributeVal
     });
     let attribute_val: Option<AttributeValue> = match t.name().as_ref() {
         b"string" => Some(AttributeValue::String(value)),
-        b"date" => Some(AttributeValue::Date(
-            DateTime::parse_from_rfc3339(&value).unwrap().into(),
-        )),
-        b"int" => Some(AttributeValue::Int(value.parse::<i64>().unwrap())),
-        b"float" => Some(AttributeValue::Float(value.parse::<f64>().unwrap())),
-        b"boolean" => Some(AttributeValue::Boolean(value.parse::<bool>().unwrap())),
-        b"id" => Some(AttributeValue::ID(Uuid::from_str(&value).unwrap())),
+        b"date" => {
+            let dt = DateTime::parse_from_rfc3339(&value);
+            Some(AttributeValue::Date(match dt {
+                Ok(dt) => dt.into(),
+                Err(_e) => {
+                    match NaiveDateTime::parse_from_str(&value, "%Y-%m-%dT%H:%M:%S%.f") {
+                        Ok(dt) => dt.and_local_timezone(Utc).unwrap().into(),
+                        Err(e) => {
+                            eprintln!("Could not parse datetime '{}'. Will use datetime epoch 0 instead.\nError {:?}",value,e);
+                            DateTime::default()
+                        }
+                    }
+                }
+            }))
+        }
+        b"int" => {
+            let parsed_val = match value.parse::<i64>() {
+                Ok(n) => n,
+                Err(e) => {
+                    eprintln!("Could not parse integer {:?}: Error {}", value, e);
+                    i64::default()
+                }
+            };
+            Some(AttributeValue::Int(parsed_val))
+        }
+        b"float" => {
+            let parsed_val = match value.parse::<f64>() {
+                Ok(n) => n,
+                Err(e) => {
+                    eprintln!("Could not parse float {:?}: Error {}", value, e);
+                    f64::default()
+                }
+            };
+            Some(AttributeValue::Float(parsed_val))
+        }
+        b"boolean" => {
+            let parsed_val = match value.parse::<bool>() {
+                Ok(n) => n,
+                Err(e) => {
+                    eprintln!("Could not parse boolean {:?}: Error {}", value, e);
+                    bool::default()
+                }
+            };
+            Some(AttributeValue::Boolean(parsed_val))
+        }
+        b"id" => {
+            let parsed_val = match Uuid::from_str(&value) {
+                Ok(n) => n,
+                Err(e) => {
+                    eprintln!("Could not parse UUID {:?}: Error {}", value, e);
+                    Uuid::default()
+                }
+            };
+
+            Some(AttributeValue::ID(parsed_val))
+        }
         b"container" => Some(AttributeValue::Container(HashMap::new())),
         b"list" => Some(AttributeValue::List(Vec::new())),
         _ => {
