@@ -6,7 +6,7 @@ mod xes_tests {
 
     #[test]
     fn basic_xes() {
-        let log = import_xes_file("../../../../dow/roadtraffic50traces.xes");
+        let log = import_xes_file("../../../../dow/roadtraffic50traces.xes", None);
         println!("{:#?}",log);
     }
 
@@ -18,7 +18,7 @@ mod xes_tests {
             let path_str = path.to_str().unwrap();
             if path_str.ends_with(".xes") || path_str.ends_with(".xes.gz") {
                 println!("Path: {}", path_str);
-                let _log = import_xes_file(path_str);
+                let _log = import_xes_file(path_str, None);
                 println!("Success!");
                 // println!("{:#?}",_log);
             }

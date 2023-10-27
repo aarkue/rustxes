@@ -7,7 +7,6 @@ use polars::{
 };
 use pyo3::prelude::*;
 use pyo3_polars::PyDataFrame;
-use quick_xml::escape::unescape;
 use rayon::prelude::{IntoParallelRefIterator, ParallelIterator};
 use serde::{Deserialize, Serialize};
 
@@ -53,7 +52,7 @@ fn attribute_value_to_any_value<'a>(
     utc_tz: &'a Option<String>,
 ) -> AnyValue<'a> {
     match from {
-        AttributeValue::String(v) => AnyValue::Utf8Owned(unescape(v.as_str()).unwrap().into()),
+        AttributeValue::String(v) => AnyValue::Utf8Owned(v.into()),
         AttributeValue::Date(v) => {
             return AnyValue::Datetime(
                 v.timestamp_nanos_opt().unwrap(),
@@ -185,11 +184,11 @@ fn convert_log_to_df(log: &EventLog) -> Result<DataFrame, PolarsError> {
 /// Returns a tuple of a Polars [DataFrame] for the event data and a json-encoding of  all log attributes/extensions/classifiers
 ///
 #[pyfunction]
-fn import_xes_rs(path: String) -> PyResult<(PyDataFrame, String)> {
+fn import_xes_rs(path: String, date_format: Option<&str>) -> PyResult<(PyDataFrame, String)> {
     println!("Starting XES Import");
     let start_now = Instant::now();
     let mut now = Instant::now();
-    let log = xes_import::import_xes_file(&path);
+    let log = xes_import::import_xes_file(&path, date_format);
     println!("Importing XES Log took {:.2?}", now.elapsed());
     now = Instant::now();
     // add_start_end_acts(&mut log);
