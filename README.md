@@ -1,7 +1,6 @@
 # rustxes
 A Python package to efficiently import XES event logs using Rust.
 
-It currently parsing traces and events including basic attribute values, but not nested attributes (`Container`/`List`).
 It supports parsing data both from `.xes` XML files and `.xes.gz` archives (and also from strings directly if needed). 
 
 ## Development
