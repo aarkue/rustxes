@@ -111,7 +111,7 @@ fn convert_log_to_df(log: &EventLog) -> Result<DataFrame, PolarsError> {
     let x: Vec<Series> = all_attributes
         .par_iter()
         .map(|k| {
-            let entries: Vec<AnyValue> = log
+            let mut entries: Vec<AnyValue> = log
                 .traces
                 .iter()
                 .map(|t| -> Vec<AnyValue> {
@@ -130,6 +130,38 @@ fn convert_log_to_df(log: &EventLog) -> Result<DataFrame, PolarsError> {
                 })
                 .flatten()
                 .collect();
+
+            let mut unique_dtypes: HashSet<DataType> =
+                entries.iter().map(|v| v.dtype()).collect();
+            unique_dtypes.remove(&DataType::Unknown);
+            if unique_dtypes.len() > 1 {
+                eprintln!(
+                    "Warning: Attribute {} contains values of different dtypes ({:?})",
+                    k, unique_dtypes
+                );
+                if unique_dtypes
+                    == vec![DataType::Float64, DataType::Int64]
+                        .into_iter()
+                        .collect()
+                {
+                    entries = entries
+                        .into_iter()
+                        .map(|val| match val {
+                            AnyValue::Int64(n) => AnyValue::Float64(n as f64),
+                            x => x,
+                        })
+                        .collect();
+                } else {
+                    entries = entries
+                        .into_iter()
+                        .map(|val| match val {
+                            AnyValue::Null => AnyValue::Null,
+                            AnyValue::Utf8Owned(s) => AnyValue::Utf8Owned(s),
+                            x => AnyValue::Utf8Owned(x.to_string().into()),
+                        })
+                        .collect();
+                }
+            }
             Series::new(k, &entries)
         })
         .collect();
