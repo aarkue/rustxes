@@ -78,8 +78,10 @@ fn attribute_value_to_any_value<'a>(
 ///
 /// Flattens event log and adds trace-level attributes to events with prefixed attribute key (see [TRACE_PREFIX])
 ///
-fn convert_log_to_df(log: &EventLog) -> Result<DataFrame, PolarsError> {
-    println!("Starting converting log to DataFrame");
+fn convert_log_to_df(log: &EventLog, print_debug: Option<bool>) -> Result<DataFrame, PolarsError> {
+    if print_debug.is_some_and(|a| a) {
+        println!("Starting converting log to DataFrame");
+    }
     let mut now = Instant::now();
     let all_attributes: HashSet<String> = log
         .traces
@@ -104,7 +106,9 @@ fn convert_log_to_df(log: &EventLog) -> Result<DataFrame, PolarsError> {
         })
         .flatten()
         .collect();
-    println!("Gathering all attributes took {:.2?}", now.elapsed());
+    if print_debug.is_some_and(|a| a) {
+        println!("Gathering all attributes took {:.2?}", now.elapsed());
+    }
     let utc_tz = Some("UTC".to_string());
     now = Instant::now();
     let x: Vec<Series> = all_attributes
@@ -130,8 +134,7 @@ fn convert_log_to_df(log: &EventLog) -> Result<DataFrame, PolarsError> {
                 .flatten()
                 .collect();
 
-            let mut unique_dtypes: HashSet<DataType> =
-                entries.iter().map(|v| v.dtype()).collect();
+            let mut unique_dtypes: HashSet<DataType> = entries.iter().map(|v| v.dtype()).collect();
             unique_dtypes.remove(&DataType::Unknown);
             if unique_dtypes.len() > 1 {
                 eprintln!(
@@ -164,36 +167,53 @@ fn convert_log_to_df(log: &EventLog) -> Result<DataFrame, PolarsError> {
             Series::new(k, &entries)
         })
         .collect();
-
-    println!(
-        "Creating a Series for every Attribute took {:.2?}",
-        now.elapsed()
-    );
+    if print_debug.is_some_and(|a| a) {
+        println!(
+            "Creating a Series for every Attribute took {:.2?}",
+            now.elapsed()
+        );
+    }
     now = Instant::now();
     let df = DataFrame::new(x).unwrap();
-    println!(
-        "Constructing DF from Attribute Series took {:.2?}",
-        now.elapsed()
-    );
+    if print_debug.is_some_and(|a| a) {
+        println!(
+            "Constructing DF from Attribute Series took {:.2?}",
+            now.elapsed()
+        );
+    }
     return Ok(df);
 }
 
 ///
-/// Import a XES event log
+/// Import an XES event log
 ///
 /// Returns a tuple of a Polars [DataFrame] for the event data and a json-encoding of  all log attributes/extensions/classifiers
+/// 
+/// * `path` - The filepath of the .xes or .xes.gz file to import
+/// * `date_format` - Optional date format to use for parsing <date> tags (See https://docs.rs/chrono/latest/chrono/format/strftime/index.html)
+/// * `print_debug` - Optional flag to enable debug print outputs
 ///
 #[pyfunction]
-fn import_xes_rs(path: String, date_format: Option<&str>) -> PyResult<(PyDataFrame, String)> {
-    println!("Starting XES Import");
+fn import_xes_rs(
+    path: String,
+    date_format: Option<&str>,
+    print_debug: Option<bool>,
+) -> PyResult<(PyDataFrame, String)> {
+    if print_debug.is_some_and(|a| a) {
+        println!("Starting XES Import");
+    }
     let start_now = Instant::now();
     let mut now = Instant::now();
     let log = xes_import::import_xes_file(&path, date_format);
-    println!("Importing XES Log took {:.2?}", now.elapsed());
+    if print_debug.is_some_and(|a| a) {
+        println!("Importing XES Log took {:.2?}", now.elapsed());
+    }
     now = Instant::now();
     // add_start_end_acts(&mut log);
-    let converted_log = convert_log_to_df(&log).unwrap();
-    println!("Finished Converting Log; Took {:.2?}", now.elapsed());
+    let converted_log = convert_log_to_df(&log, print_debug).unwrap();
+    if print_debug.is_some_and(|a| a) {
+        println!("Finished Converting Log; Took {:.2?}", now.elapsed());
+    }
     #[derive(Debug, Serialize, Deserialize)]
     struct OtherLogData {
         pub attributes: Attributes,
@@ -205,7 +225,9 @@ fn import_xes_rs(path: String, date_format: Option<&str>) -> PyResult<(PyDataFra
         extensions: log.extensions,
         classifiers: log.classifiers,
     };
-    println!("Total duration: {:.2?}", start_now.elapsed());
+    if print_debug.is_some_and(|a| a) {
+        println!("Total duration: {:.2?}", start_now.elapsed());
+    }
     Ok((
         PyDataFrame(converted_log),
         serde_json::to_string(&other_data).unwrap(),
