@@ -1,20 +1,25 @@
-use std::{collections::HashSet, time::Instant};
+use std::{
+    collections::{HashMap, HashSet},
+    time::Instant,
+};
 
-use event_log_struct::{Attribute, AttributeValue, EventLog};
 use polars::{
-    prelude::{AnyValue, DataFrame, DataType, NamedFrom, PolarsError},
+    prelude::*,
     series::Series,
+};
+use process_mining::{
+    event_log::{
+        stream_xes::XESOuterLogData, Attribute, AttributeAddable, AttributeValue, Trace,
+    },
+    import_xes_file, EventLog, XESImportOptions,
 };
 use pyo3::prelude::*;
 use pyo3_polars::PyDataFrame;
 use rayon::prelude::{IntoParallelRefIterator, ParallelIterator};
-use serde::{Deserialize, Serialize};
 
-use crate::event_log_struct::{Attributes, EventLogClassifier, EventLogExtension};
 
-pub mod event_log_struct;
+
 mod test;
-pub mod xes_import;
 ///
 /// Prefix to attribute keys for trace-level attributes (e.g., when "flattening" the log to a [DataFrame])
 ///
@@ -73,12 +78,13 @@ fn attribute_value_to_any_value<'a>(
         AttributeValue::None() => AnyValue::Null,
     }
 }
+
 ///
 /// Convert an [EventLog] to a Polars [DataFrame]
 ///
 /// Flattens event log and adds trace-level attributes to events with prefixed attribute key (see [TRACE_PREFIX])
 ///
-fn convert_log_to_df(log: &EventLog, print_debug: Option<bool>) -> Result<DataFrame, PolarsError> {
+pub fn convert_log_to_df(log: &EventLog, print_debug: Option<bool>) -> Result<DataFrame, PolarsError> {
     if print_debug.is_some_and(|a| a) {
         println!("Starting converting log to DataFrame");
     }
@@ -89,20 +95,20 @@ fn convert_log_to_df(log: &EventLog, print_debug: Option<bool>) -> Result<DataFr
         .flat_map(|t| {
             let trace_attrs: HashSet<String> = t
                 .attributes
-                .keys()
-                .map(|k| TRACE_PREFIX.to_string() + k.as_str())
+                .iter()
+                .map(|a| TRACE_PREFIX.to_string() + a.key.as_str())
                 .collect();
             let m: HashSet<String> = t
                 .events
                 .iter()
                 .flat_map(|e| {
                     e.attributes
-                        .keys()
-                        .map(|k| k.clone())
+                        .iter()
+                        .map(|a| a.key.clone())
                         .collect::<Vec<String>>()
                 })
                 .collect();
-            return [trace_attrs, m];
+            [trace_attrs, m]
         })
         .flatten()
         .collect();
@@ -113,25 +119,36 @@ fn convert_log_to_df(log: &EventLog, print_debug: Option<bool>) -> Result<DataFr
     now = Instant::now();
     let x: Vec<Series> = all_attributes
         .par_iter()
-        .map(|k| {
+        .map(|k: &String| {
             let mut entries: Vec<AnyValue> = log
                 .traces
                 .iter()
-                .map(|t| -> Vec<AnyValue> {
+                .flat_map(|t| -> Vec<AnyValue> {
                     if k.starts_with(TRACE_PREFIX) {
                         let trace_k: String = k.chars().skip(TRACE_PREFIX.len()).collect();
                         vec![
-                            attribute_to_any_value(t.attributes.get(&trace_k), &utc_tz);
+                            attribute_to_any_value(
+                                t.attributes.get_by_key_or_global(
+                                    &trace_k,
+                                    &log.global_trace_attrs.as_ref()
+                                ),
+                                &utc_tz
+                            );
                             t.events.len()
                         ]
                     } else {
                         t.events
                             .iter()
-                            .map(|e| attribute_to_any_value(e.attributes.get(k), &utc_tz))
+                            .map(|e| {
+                                attribute_to_any_value(
+                                    e.attributes
+                                        .get_by_key_or_global(k, &log.global_event_attrs.as_ref()),
+                                    &utc_tz,
+                                )
+                            })
                             .collect()
                     }
                 })
-                .flatten()
                 .collect();
 
             let mut unique_dtypes: HashSet<DataType> = entries.iter().map(|v| v.dtype()).collect();
@@ -164,7 +181,7 @@ fn convert_log_to_df(log: &EventLog, print_debug: Option<bool>) -> Result<DataFr
                         .collect();
                 }
             }
-            Series::new(k, &entries)
+            Series::new(k, entries)
         })
         .collect();
     if print_debug.is_some_and(|a| a) {
@@ -181,14 +198,61 @@ fn convert_log_to_df(log: &EventLog, print_debug: Option<bool>) -> Result<DataFr
             now.elapsed()
         );
     }
-    return Ok(df);
+    Ok(df)
+}
+
+pub fn convert_trace_stream_to_df<I>(trace_stream: I) -> Result<DataFrame, PolarsError>
+where
+    I: Iterator<Item = Trace>,
+{
+    let utc_tz = Some("UTC".to_string());
+    let mut series_per_key: HashMap<String, Series> = HashMap::new();
+    let mut visited_events = 0;
+    for trace in trace_stream {
+        for event in trace.events {
+            for (key, series) in &mut series_per_key {
+                let ss = Series::from_any_values_and_dtype(
+                    key,
+                    &[attribute_to_any_value(
+                        event.attributes.get_by_key(key),
+                        &utc_tz,
+                    )],
+                    &DataType::Utf8,
+                    false,
+                )
+                .unwrap();
+                series.append(&ss).unwrap();
+            }
+            for attr in &event.attributes {
+                if !series_per_key.contains_key(&attr.key) {
+                    let mut series = Series::full_null(&attr.key, visited_events, &DataType::Utf8);
+                    let ss = Series::from_any_values_and_dtype(
+                        &attr.key,
+                        &[attribute_to_any_value(
+                            event.attributes.get_by_key(&attr.key),
+                            &utc_tz,
+                        )],
+                        &DataType::Utf8,
+                        false,
+                    )
+                    .unwrap();
+                    series.append(&ss).unwrap();
+                    series_per_key.insert(attr.key.clone(), series);
+                }
+            }
+            visited_events += 1;
+        }
+    }
+
+    let serieses = series_per_key.into_values().collect();
+    DataFrame::new(serieses)
 }
 
 ///
 /// Import an XES event log
 ///
 /// Returns a tuple of a Polars [DataFrame] for the event data and a json-encoding of  all log attributes/extensions/classifiers
-/// 
+///
 /// * `path` - The filepath of the .xes or .xes.gz file to import
 /// * `date_format` - Optional date format to use for parsing <date> tags (See https://docs.rs/chrono/latest/chrono/format/strftime/index.html)
 /// * `print_debug` - Optional flag to enable debug print outputs
@@ -196,7 +260,7 @@ fn convert_log_to_df(log: &EventLog, print_debug: Option<bool>) -> Result<DataFr
 #[pyfunction]
 fn import_xes_rs(
     path: String,
-    date_format: Option<&str>,
+    date_format: Option<String>,
     print_debug: Option<bool>,
 ) -> PyResult<(PyDataFrame, String)> {
     if print_debug.is_some_and(|a| a) {
@@ -204,27 +268,30 @@ fn import_xes_rs(
     }
     let start_now = Instant::now();
     let mut now = Instant::now();
-    let log = xes_import::import_xes_file(&path, date_format);
+    let log = import_xes_file(
+        &path,
+        XESImportOptions {
+            date_format,
+            ..Default::default()
+        },
+    )
+    .unwrap();
     if print_debug.is_some_and(|a| a) {
         println!("Importing XES Log took {:.2?}", now.elapsed());
     }
     now = Instant::now();
     // add_start_end_acts(&mut log);
+    let other_data = XESOuterLogData {
+        log_attributes: log.attributes.clone(),
+        extensions: log.extensions.clone().unwrap_or_default().clone(),
+        classifiers: log.classifiers.clone().unwrap_or_default().clone(),
+        global_trace_attrs: log.global_trace_attrs.clone().unwrap_or_default(),
+        global_event_attrs: log.global_event_attrs.clone().unwrap_or_default(),
+    };
     let converted_log = convert_log_to_df(&log, print_debug).unwrap();
     if print_debug.is_some_and(|a| a) {
         println!("Finished Converting Log; Took {:.2?}", now.elapsed());
     }
-    #[derive(Debug, Serialize, Deserialize)]
-    struct OtherLogData {
-        pub attributes: Attributes,
-        pub extensions: Option<Vec<EventLogExtension>>,
-        pub classifiers: Option<Vec<EventLogClassifier>>,
-    }
-    let other_data = OtherLogData {
-        attributes: log.attributes,
-        extensions: log.extensions,
-        classifiers: log.classifiers,
-    };
     if print_debug.is_some_and(|a| a) {
         println!("Total duration: {:.2?}", start_now.elapsed());
     }
