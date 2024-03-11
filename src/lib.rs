@@ -1,25 +1,19 @@
-use std::{
-    collections::{HashMap, HashSet},
-    time::Instant,
-};
+use std::{collections::HashSet, time::Instant};
 
-use polars::{
-    prelude::*,
-    series::Series,
-};
+use polars::{prelude::*, series::Series};
 use process_mining::{
-    event_log::{
-        stream_xes::XESOuterLogData, Attribute, AttributeAddable, AttributeValue, Trace,
-    },
+    event_log::{stream_xes::XESOuterLogData, Attribute, AttributeValue, XESEditableAttribute},
     import_xes_file, EventLog, XESImportOptions,
 };
 use pyo3::prelude::*;
 use pyo3_polars::PyDataFrame;
 use rayon::prelude::{IntoParallelRefIterator, ParallelIterator};
 
+use crate::ocel::{import_ocel_json_rs, import_ocel_xml_rs};
 
-
+mod ocel;
 mod test;
+
 ///
 /// Prefix to attribute keys for trace-level attributes (e.g., when "flattening" the log to a [DataFrame])
 ///
@@ -57,34 +51,52 @@ fn attribute_value_to_any_value<'a>(
     utc_tz: &'a Option<String>,
 ) -> AnyValue<'a> {
     match from {
-        AttributeValue::String(v) => AnyValue::Utf8Owned(v.into()),
+        AttributeValue::String(v) => AnyValue::StringOwned(v.into()),
         AttributeValue::Date(v) => {
+            // Fallback for testing:
+            // return AnyValue::StringOwned(v.to_string().into());
             return AnyValue::Datetime(
                 v.timestamp_nanos_opt().unwrap(),
                 polars::prelude::TimeUnit::Nanoseconds,
                 utc_tz,
-            )
+            );
         }
         AttributeValue::Int(v) => AnyValue::Int64(*v),
         AttributeValue::Float(v) => AnyValue::Float64(*v),
         AttributeValue::Boolean(v) => AnyValue::Boolean(*v),
         AttributeValue::ID(v) => {
             let s = v.to_string();
-            AnyValue::Utf8Owned(s.into())
+            AnyValue::StringOwned(s.into())
         }
         // TODO: Add proper List/Container support
-        AttributeValue::List(l) => AnyValue::Utf8Owned(format!("{:?}", l).into()),
-        AttributeValue::Container(c) => AnyValue::Utf8Owned(format!("{:?}", c).into()),
+        AttributeValue::List(l) => AnyValue::StringOwned(format!("{:?}", l).into()),
+        AttributeValue::Container(c) => AnyValue::StringOwned(format!("{:?}", c).into()),
         AttributeValue::None() => AnyValue::Null,
     }
 }
 
+fn attribute_to_dtype(from: &AttributeValue, _utc_tz: &Option<String>) -> DataType {
+    match from {
+        AttributeValue::String(_) => DataType::String,
+        AttributeValue::Date(_) => DataType::String, //DataType::Datetime(TimeUnit::Nanoseconds, utc_tz.clone()),
+        AttributeValue::Int(_) => DataType::Int64,
+        AttributeValue::Float(_) => DataType::Float64,
+        AttributeValue::Boolean(_) => DataType::Boolean,
+        AttributeValue::ID(_) => DataType::String,
+        AttributeValue::List(_) => todo!(),
+        AttributeValue::Container(_) => todo!(),
+        AttributeValue::None() => DataType::Unknown,
+    }
+}
 ///
 /// Convert an [EventLog] to a Polars [DataFrame]
 ///
 /// Flattens event log and adds trace-level attributes to events with prefixed attribute key (see [TRACE_PREFIX])
 ///
-pub fn convert_log_to_df(log: &EventLog, print_debug: Option<bool>) -> Result<DataFrame, PolarsError> {
+pub fn convert_log_to_df(
+    log: &EventLog,
+    print_debug: Option<bool>,
+) -> Result<DataFrame, PolarsError> {
     if print_debug.is_some_and(|a| a) {
         println!("Starting converting log to DataFrame");
     }
@@ -153,6 +165,7 @@ pub fn convert_log_to_df(log: &EventLog, print_debug: Option<bool>) -> Result<Da
 
             let mut unique_dtypes: HashSet<DataType> = entries.iter().map(|v| v.dtype()).collect();
             unique_dtypes.remove(&DataType::Unknown);
+            unique_dtypes.remove(&DataType::Null);
             if unique_dtypes.len() > 1 {
                 eprintln!(
                     "Warning: Attribute {} contains values of different dtypes ({:?})",
@@ -175,8 +188,8 @@ pub fn convert_log_to_df(log: &EventLog, print_debug: Option<bool>) -> Result<Da
                         .into_iter()
                         .map(|val| match val {
                             AnyValue::Null => AnyValue::Null,
-                            AnyValue::Utf8Owned(s) => AnyValue::Utf8Owned(s),
-                            x => AnyValue::Utf8Owned(x.to_string().into()),
+                            AnyValue::String(s) => AnyValue::String(s),
+                            x => AnyValue::StringOwned(x.to_string().into()),
                         })
                         .collect();
                 }
@@ -191,7 +204,7 @@ pub fn convert_log_to_df(log: &EventLog, print_debug: Option<bool>) -> Result<Da
         );
     }
     now = Instant::now();
-    let df = DataFrame::new(x).unwrap();
+    let df = unsafe { DataFrame::new_no_checks(x) };
     if print_debug.is_some_and(|a| a) {
         println!(
             "Constructing DF from Attribute Series took {:.2?}",
@@ -199,53 +212,6 @@ pub fn convert_log_to_df(log: &EventLog, print_debug: Option<bool>) -> Result<Da
         );
     }
     Ok(df)
-}
-
-pub fn convert_trace_stream_to_df<I>(trace_stream: I) -> Result<DataFrame, PolarsError>
-where
-    I: Iterator<Item = Trace>,
-{
-    let utc_tz = Some("UTC".to_string());
-    let mut series_per_key: HashMap<String, Series> = HashMap::new();
-    let mut visited_events = 0;
-    for trace in trace_stream {
-        for event in trace.events {
-            for (key, series) in &mut series_per_key {
-                let ss = Series::from_any_values_and_dtype(
-                    key,
-                    &[attribute_to_any_value(
-                        event.attributes.get_by_key(key),
-                        &utc_tz,
-                    )],
-                    &DataType::Utf8,
-                    false,
-                )
-                .unwrap();
-                series.append(&ss).unwrap();
-            }
-            for attr in &event.attributes {
-                if !series_per_key.contains_key(&attr.key) {
-                    let mut series = Series::full_null(&attr.key, visited_events, &DataType::Utf8);
-                    let ss = Series::from_any_values_and_dtype(
-                        &attr.key,
-                        &[attribute_to_any_value(
-                            event.attributes.get_by_key(&attr.key),
-                            &utc_tz,
-                        )],
-                        &DataType::Utf8,
-                        false,
-                    )
-                    .unwrap();
-                    series.append(&ss).unwrap();
-                    series_per_key.insert(attr.key.clone(), series);
-                }
-            }
-            visited_events += 1;
-        }
-    }
-
-    let serieses = series_per_key.into_values().collect();
-    DataFrame::new(serieses)
 }
 
 ///
@@ -280,7 +246,6 @@ fn import_xes_rs(
         println!("Importing XES Log took {:.2?}", now.elapsed());
     }
     now = Instant::now();
-    // add_start_end_acts(&mut log);
     let other_data = XESOuterLogData {
         log_attributes: log.attributes.clone(),
         extensions: log.extensions.clone().unwrap_or_default().clone(),
@@ -305,5 +270,7 @@ fn import_xes_rs(
 #[pymodule]
 fn rustxes(_py: Python, m: &PyModule) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(import_xes_rs, m)?)?;
+    m.add_function(wrap_pyfunction!(import_ocel_xml_rs, m)?)?;
+    m.add_function(wrap_pyfunction!(import_ocel_json_rs, m)?)?;
     Ok(())
 }
