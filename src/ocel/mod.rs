@@ -49,8 +49,17 @@ pub fn ocel2_to_df(ocel: &OCEL) -> OCEL2DataFrames {
         .flat_map(|ot| &ot.attributes)
         .map(|at| at.name.clone())
         .collect();
-    // let actual_object_attributes: HashSet<String> = ocel.objects.iter().flat_map(|o| o.attributes.iter().map(|oa| oa.name.clone())).collect();
+    let actual_object_attributes: HashSet<String> = ocel
+        .objects
+        .iter()
+        .flat_map(|o| o.attributes.iter().map(|oa| oa.name.clone()))
+        .collect();
     // println!("Object attributes: {:?}; Actual object attributes: {:?}", object_attributes.len(), actual_object_attributes.len());
+    if !object_attributes.is_superset(&actual_object_attributes) {
+        eprintln!(
+            "Warning: Global object attributes is not a superset of actual object attributes"
+        );
+    }
     let object_attributes_initial: HashSet<String> = object_attributes
         .clone()
         .into_iter()
@@ -177,11 +186,15 @@ pub fn ocel2_to_df(ocel: &OCEL) -> OCEL2DataFrames {
             &all_evs_with_rels
                 .iter()
                 .map(|(_e, r)| {
-                    AnyValue::StringOwned(
-                        (*obj_id_to_type_map.get(&r.object_id).unwrap())
-                            .clone()
-                            .into(),
-                    )
+                    if let Some(obj_type) = obj_id_to_type_map.get(&r.object_id) {
+                        AnyValue::StringOwned((*obj_type).into())
+                    } else {
+                        eprintln!(
+                            "Invalid object id in E2O reference: Event: {}, Object: {}",
+                            _e.id, r.object_id
+                        );
+                        AnyValue::Null
+                    }
                 })
                 .collect::<Vec<_>>(),
             false,

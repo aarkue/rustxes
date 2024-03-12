@@ -13,8 +13,8 @@ mod xes_tests {
         series::Series,
     };
     use process_mining::{
-        event_log::{Trace, XESEditableAttribute},
-        import_ocel_xml_file, import_xes_file, stream_xes_from_path, XESImportOptions,
+        event_log::{Trace, XESEditableAttribute}, import_ocel_xml_slice, import_xes_file,
+        XESImportOptions,
     };
 
     use crate::{
@@ -26,7 +26,7 @@ mod xes_tests {
         let now = Instant::now();
         let now_total = Instant::now();
         let log = import_xes_file(
-            "/home/aarkue/doc/sciebo/alpha-revisit/BPI_Challenge_2018.xes",
+            "/home/aarkue/doc/sciebo/alpha-revisit/BPI_Challenge_2017.xes",
             XESImportOptions {
                 ..Default::default()
             },
@@ -70,8 +70,8 @@ mod xes_tests {
     #[test]
     fn test_ocel2_df() {
         let now = Instant::now();
-
-        let ocel = import_ocel_xml_file("/home/aarkue/dow/ocel2-p2p.xml");
+        let ocel_bytes = include_bytes!("../test_data/order-management.xml");
+        let ocel = import_ocel_xml_slice(ocel_bytes);
         let ocel_dfs = ocel2_to_df(&ocel);
         println!(
             "Got OCEL DF with {:?} objects in {:?}; Object change shape: {:?}; O2O shape: {:?}; E2O shape: {:?}",
@@ -81,9 +81,29 @@ mod xes_tests {
             ocel_dfs.o2o.shape(),
             ocel_dfs.e2o.shape()
         );
-        // println!("{:?}",ocel_dfs.object_changes.head(Some(10cl)));
-        // println!("{:?}",ocel_dfs.object_changes.get_column_names());
+
+        // Assert DF shapes based on OCEL information
+        assert_eq!(ocel.objects.len(), 10840);
         assert_eq!(ocel.objects.len(), ocel_dfs.objects.shape().0);
+
+        assert_eq!(ocel.events.len(), 21008);
+        assert_eq!(ocel.events.len(), ocel_dfs.events.shape().0);
+
+        assert_eq!(
+            ocel.events
+                .iter()
+                .flat_map(|ev| ev.relationships.clone().unwrap_or_default())
+                .count(),
+                ocel_dfs.e2o.shape().0
+        );
+        assert_eq!(ocel.events.len(), ocel_dfs.events.shape().0);
+
+        // Known DF-shapes (match PM4PY implementation)
+        assert_eq!(ocel_dfs.objects.shape(),(10840,2));
+        assert_eq!(ocel_dfs.events.shape(),(21008,3));
+        assert_eq!(ocel_dfs.e2o.shape(),(147463,6));
+        assert_eq!(ocel_dfs.o2o.shape(),(28391,3));
+        assert_eq!(ocel_dfs.object_changes.shape(),(18604,7));
     }
 
     // #[test]
