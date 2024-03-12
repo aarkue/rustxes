@@ -1,7 +1,9 @@
 # rustxes
-A Python package to efficiently import XES event logs using Rust.
+A Python package to efficiently import XES or OCEL2 event logs using Rust.
 
 It supports parsing data both from `.xes` XML files and `.xes.gz` archives (and also from strings directly if needed). 
+
+Since version `0.2.0`, it also supports parsing OCEL2 XML or JSON files.
 
 
 ## Options
