@@ -142,7 +142,7 @@ pub fn convert_log_to_df(
                             attribute_to_any_value(
                                 t.attributes.get_by_key_or_global(
                                     &trace_k,
-                                    &log.global_trace_attrs.as_ref()
+                                    &log.global_trace_attrs
                                 ),
                                 &utc_tz
                             );
@@ -154,7 +154,7 @@ pub fn convert_log_to_df(
                             .map(|e| {
                                 attribute_to_any_value(
                                     e.attributes
-                                        .get_by_key_or_global(k, &log.global_event_attrs.as_ref()),
+                                        .get_by_key_or_global(k, &log.global_event_attrs),
                                     &utc_tz,
                                 )
                             })
