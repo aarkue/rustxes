@@ -1075,9 +1075,9 @@ dependencies = [
 
 [[package]]
 name = "process_mining"
-version = "0.2.7"
+version = "0.3.13"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "edec45ed230eb0a5d31e6a7ca20086f7dca96ec1551348e2ee0fd9ae294d68ce"
+checksum = "df4483004c273c7c3266b524cadc31d286763d47f4a98630c1d786983eb8737d"
 dependencies = [
  "chrono",
  "flate2",
@@ -1305,7 +1305,7 @@ checksum = "7ffc183a10b4478d04cbbbfc96d0873219d962dd5accaff2ffbd4ceb7df837f4"
 
 [[package]]
 name = "rustxes"
-version = "0.2.2"
+version = "0.2.3"
 dependencies = [
  "chrono",
  "flate2",

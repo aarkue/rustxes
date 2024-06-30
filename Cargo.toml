@@ -1,6 +1,6 @@
 [package]
 name = "rustxes"
-version = "0.2.2"
+version = "0.2.3"
 edition = "2021"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
@@ -19,5 +19,5 @@ serde_json = "1.0.105"
 serde = {version = "1.0.188", features = ["derive"]}
 chrono = {version = "0.4.29", features = ["serde"] }
 uuid = {version = "1.4.1", features = ["v4", "serde"]}
-process_mining = "0.2.7"
+process_mining = "0.3.13"
 # process_mining = {path = "../../rust-bridge-process-mining/process_mining"}
