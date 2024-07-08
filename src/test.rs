@@ -68,6 +68,26 @@ mod xes_tests {
     // }
 
     #[test]
+    fn test_ocel2_container_df() {
+        let now = Instant::now();
+        let ocel_bytes = include_bytes!("../test_data/ContainerLogistics.xml");
+        let ocel = import_ocel_xml_slice(ocel_bytes);
+        let ocel_dfs = ocel2_to_df(&ocel);
+        println!(
+            "Got OCEL DF with {:?} objects in {:?}; Object change shape: {:?}; O2O shape: {:?}; E2O shape: {:?}",
+            ocel_dfs.objects.shape(),
+            now.elapsed(),
+            ocel_dfs.object_changes.shape(),
+            ocel_dfs.o2o.shape(),
+            ocel_dfs.e2o.shape()
+        );
+        assert_eq!(ocel.objects.len(), 13910);
+        assert_eq!(ocel.events.len(), 35413);
+
+
+    }
+
+    #[test]
     fn test_ocel2_df() {
         let now = Instant::now();
         let ocel_bytes = include_bytes!("../test_data/order-management.xml");

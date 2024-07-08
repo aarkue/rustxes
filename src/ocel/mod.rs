@@ -1,12 +1,21 @@
-use std::collections::{HashMap, HashSet};
+use std::{
+    collections::{HashMap, HashSet},
+    io::BufReader,
+};
 
 use chrono::DateTime;
 use polars::{prelude::*, series::Series};
 use process_mining::{
-    import_ocel_json_from_path, import_ocel_xml_file, ocel::ocel_struct::OCELAttributeValue, OCEL,
+    import_ocel_json_from_path, import_ocel_xml, import_ocel_xml_file,
+    ocel::{
+        ocel_struct::OCELAttributeValue,
+        xml_ocel_import::{import_ocel_xml_file_with, OCELImportOptions},
+    },
+    OCEL,
 };
 use pyo3::{pyfunction, PyResult};
 use pyo3_polars::PyDataFrame;
+use quick_xml::Reader;
 
 fn ocel_attribute_val_to_any_value<'a>(
     val: &'a OCELAttributeValue,
@@ -189,10 +198,10 @@ pub fn ocel2_to_df(ocel: &OCEL) -> OCEL2DataFrames {
                     if let Some(obj_type) = obj_id_to_type_map.get(&r.object_id) {
                         AnyValue::StringOwned((*obj_type).into())
                     } else {
-                        eprintln!(
-                            "Invalid object id in E2O reference: Event: {}, Object: {}",
-                            _e.id, r.object_id
-                        );
+                        // eprintln!(
+                        //     "Invalid object id in E2O reference: Event: {}, Object: {}",
+                        //     _e.id, r.object_id
+                        // );
                         AnyValue::Null
                     }
                 })
@@ -443,7 +452,13 @@ pub fn ocel_dfs_to_py(ocel_dfs: OCEL2DataFrames) -> HashMap<String, PyDataFrame>
 
 #[pyfunction]
 pub fn import_ocel_xml_rs(path: String) -> PyResult<HashMap<String, PyDataFrame>> {
-    let ocel = import_ocel_xml_file(&path);
+    let ocel = import_ocel_xml_file_with(
+        &path,
+        OCELImportOptions {
+            verbose: false,
+            ..Default::default()
+        },
+    );
     let ocel_dfs = ocel2_to_df(&ocel);
     Ok(ocel_dfs_to_py(ocel_dfs))
 }

@@ -1075,13 +1075,13 @@ dependencies = [
 
 [[package]]
 name = "process_mining"
-version = "0.3.13"
+version = "0.3.14"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "df4483004c273c7c3266b524cadc31d286763d47f4a98630c1d786983eb8737d"
+checksum = "086541d8b6dbc983c3349439c8c249c307c211276e424c0f538b06126e21d288"
 dependencies = [
  "chrono",
  "flate2",
- "quick-xml 0.31.0",
+ "quick-xml",
  "rayon",
  "serde",
  "serde_json",
@@ -1161,15 +1161,6 @@ dependencies = [
  "polars-core",
  "pyo3",
  "thiserror",
-]
-
-[[package]]
-name = "quick-xml"
-version = "0.30.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "eff6510e86862b57b210fd8cbe8ed3f0d7d600b9c2863cd4549a2e033c66e956"
-dependencies = [
- "memchr",
 ]
 
 [[package]]
@@ -1305,7 +1296,7 @@ checksum = "7ffc183a10b4478d04cbbbfc96d0873219d962dd5accaff2ffbd4ceb7df837f4"
 
 [[package]]
 name = "rustxes"
-version = "0.2.3"
+version = "0.2.4"
 dependencies = [
  "chrono",
  "flate2",
@@ -1313,7 +1304,7 @@ dependencies = [
  "process_mining",
  "pyo3",
  "pyo3-polars",
- "quick-xml 0.30.0",
+ "quick-xml",
  "rayon",
  "serde",
  "serde_json",
