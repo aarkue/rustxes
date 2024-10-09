@@ -112,7 +112,7 @@ mod xes_tests {
         assert_eq!(
             ocel.events
                 .iter()
-                .flat_map(|ev| ev.relationships.clone().unwrap_or_default())
+                .flat_map(|ev| ev.relationships.clone())
                 .count(),
                 ocel_dfs.e2o.shape().0
         );

@@ -134,9 +134,7 @@ pub fn ocel2_to_df(ocel: &OCEL) -> OCEL2DataFrames {
         .iter()
         .flat_map(|e| {
             e.relationships
-                .clone()
-                .unwrap_or_default()
-                .into_iter()
+                .iter()
                 .map(move |r| (e, r))
         })
         .collect();
@@ -225,9 +223,7 @@ pub fn ocel2_to_df(ocel: &OCEL) -> OCEL2DataFrames {
         .iter()
         .flat_map(|o| {
             o.relationships
-                .clone()
-                .unwrap_or_default()
-                .into_iter()
+                .iter()
                 .map(move |r| (o, r))
         })
         .collect();
