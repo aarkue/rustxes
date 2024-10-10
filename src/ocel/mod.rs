@@ -1,12 +1,9 @@
-use std::{
-    collections::{HashMap, HashSet},
-    io::BufReader,
-};
+use std::collections::{HashMap, HashSet};
 
 use chrono::DateTime;
 use polars::{prelude::*, series::Series};
 use process_mining::{
-    import_ocel_json_from_path, import_ocel_xml, import_ocel_xml_file,
+    import_ocel_json_from_path,
     ocel::{
         ocel_struct::OCELAttributeValue,
         xml_ocel_import::{import_ocel_xml_file_with, OCELImportOptions},
@@ -15,18 +12,16 @@ use process_mining::{
 };
 use pyo3::{pyfunction, PyResult};
 use pyo3_polars::PyDataFrame;
-use quick_xml::Reader;
 
 fn ocel_attribute_val_to_any_value<'a>(
     val: &'a OCELAttributeValue,
-    utc_tz: &'a Option<String>,
 ) -> AnyValue<'a> {
     match val {
         OCELAttributeValue::String(s) => AnyValue::StringOwned(s.into()),
         OCELAttributeValue::Time(t) => AnyValue::Datetime(
             t.timestamp_nanos_opt().unwrap(),
             TimeUnit::Nanoseconds,
-            utc_tz,
+            &None,
         ),
         OCELAttributeValue::Integer(i) => AnyValue::Int64(*i),
         OCELAttributeValue::Float(f) => AnyValue::Float64(*f),
@@ -51,7 +46,6 @@ pub struct OCEL2DataFrames {
     pub e2o: DataFrame,
 }
 pub fn ocel2_to_df(ocel: &OCEL) -> OCEL2DataFrames {
-    let utc_tz = Some("UTC".to_string());
     let object_attributes: HashSet<String> = ocel
         .object_types
         .iter()
@@ -85,7 +79,7 @@ pub fn ocel2_to_df(ocel: &OCEL) -> OCEL2DataFrames {
             .into_iter()
             .map(|name| {
                 Series::from_any_values(
-                    &name,
+                    (&name).into(),
                     ocel.objects
                         .iter()
                         .map(|o| {
@@ -97,7 +91,7 @@ pub fn ocel2_to_df(ocel: &OCEL) -> OCEL2DataFrames {
                                 Some(v) => &v.value,
                                 None => &OCELAttributeValue::Null,
                             };
-                            ocel_attribute_val_to_any_value(val, &utc_tz)
+                            ocel_attribute_val_to_any_value(val)
                         })
                         .collect::<Vec<_>>()
                         .as_ref(),
@@ -107,7 +101,7 @@ pub fn ocel2_to_df(ocel: &OCEL) -> OCEL2DataFrames {
             })
             .chain(vec![
                 Series::from_any_values(
-                    OCEL_OBJECT_ID_KEY,
+                    OCEL_OBJECT_ID_KEY.into(),
                     &ocel
                         .objects
                         .iter()
@@ -117,7 +111,7 @@ pub fn ocel2_to_df(ocel: &OCEL) -> OCEL2DataFrames {
                 )
                 .unwrap(),
                 Series::from_any_values(
-                    OCEL_OBJECT_TYPE_KEY,
+                    OCEL_OBJECT_TYPE_KEY.into(),
                     &ocel
                         .objects
                         .iter()
@@ -147,7 +141,7 @@ pub fn ocel2_to_df(ocel: &OCEL) -> OCEL2DataFrames {
 
     let mut e2o_df = DataFrame::from_iter(vec![
         Series::from_any_values(
-            OCEL_EVENT_ID_KEY,
+            OCEL_EVENT_ID_KEY.into(),
             &all_evs_with_rels
                 .iter()
                 .map(|(e, _r)| AnyValue::StringOwned(e.id.clone().into()))
@@ -156,7 +150,7 @@ pub fn ocel2_to_df(ocel: &OCEL) -> OCEL2DataFrames {
         )
         .unwrap(),
         Series::from_any_values(
-            OCEL_EVENT_TYPE_KEY,
+            OCEL_EVENT_TYPE_KEY.into(),
             &all_evs_with_rels
                 .iter()
                 .map(|(e, _r)| AnyValue::StringOwned(e.event_type.clone().into()))
@@ -165,14 +159,14 @@ pub fn ocel2_to_df(ocel: &OCEL) -> OCEL2DataFrames {
         )
         .unwrap(),
         Series::from_any_values(
-            OCEL_EVENT_TIMESTAMP_KEY,
+            OCEL_EVENT_TIMESTAMP_KEY.into(),
             &all_evs_with_rels
                 .iter()
                 .map(|(e, _r)| {
                     AnyValue::Datetime(
                         e.time.timestamp_nanos_opt().unwrap(),
                         TimeUnit::Nanoseconds,
-                        &utc_tz,
+                        &None,
                     )
                 })
                 .collect::<Vec<_>>(),
@@ -180,7 +174,7 @@ pub fn ocel2_to_df(ocel: &OCEL) -> OCEL2DataFrames {
         )
         .unwrap(),
         Series::from_any_values(
-            OCEL_OBJECT_ID_KEY,
+            OCEL_OBJECT_ID_KEY.into(),
             &all_evs_with_rels
                 .iter()
                 .map(|(_e, r)| AnyValue::StringOwned(r.object_id.clone().into()))
@@ -189,7 +183,7 @@ pub fn ocel2_to_df(ocel: &OCEL) -> OCEL2DataFrames {
         )
         .unwrap(),
         Series::from_any_values(
-            OCEL_OBJECT_TYPE_KEY,
+            OCEL_OBJECT_TYPE_KEY.into(),
             &all_evs_with_rels
                 .iter()
                 .map(|(_e, r)| {
@@ -208,7 +202,7 @@ pub fn ocel2_to_df(ocel: &OCEL) -> OCEL2DataFrames {
         )
         .unwrap(),
         Series::from_any_values(
-            OCEL_QUALIFIER_KEY,
+            OCEL_QUALIFIER_KEY.into(),
             &all_evs_with_rels
                 .iter()
                 .map(|(_e, r)| AnyValue::StringOwned(r.qualifier.clone().into()))
@@ -230,7 +224,7 @@ pub fn ocel2_to_df(ocel: &OCEL) -> OCEL2DataFrames {
 
     let o2o_df = DataFrame::from_iter(vec![
         Series::from_any_values(
-            OCEL_OBJECT_ID_KEY,
+            OCEL_OBJECT_ID_KEY.into(),
             &all_obj_with_rels
                 .iter()
                 .map(|(o, _r)| AnyValue::StringOwned(o.id.clone().into()))
@@ -239,7 +233,7 @@ pub fn ocel2_to_df(ocel: &OCEL) -> OCEL2DataFrames {
         )
         .unwrap(),
         Series::from_any_values(
-            OCEL_OBJECT_ID_2_KEY,
+            OCEL_OBJECT_ID_2_KEY.into(),
             &all_obj_with_rels
                 .iter()
                 .map(|(_o, r)| AnyValue::StringOwned(r.object_id.clone().into()))
@@ -248,7 +242,7 @@ pub fn ocel2_to_df(ocel: &OCEL) -> OCEL2DataFrames {
         )
         .unwrap(),
         Series::from_any_values(
-            OCEL_QUALIFIER_KEY,
+            OCEL_QUALIFIER_KEY.into(),
             &all_obj_with_rels
                 .iter()
                 .map(|(_o, r)| AnyValue::StringOwned(r.qualifier.clone().into()))
@@ -263,7 +257,7 @@ pub fn ocel2_to_df(ocel: &OCEL) -> OCEL2DataFrames {
             .into_iter()
             .map(|name| {
                 Series::from_any_values(
-                    &name,
+                    (&name).into(),
                     ocel.objects
                         .iter()
                         .flat_map(|o| {
@@ -272,7 +266,7 @@ pub fn ocel2_to_df(ocel: &OCEL) -> OCEL2DataFrames {
                         })
                         .map(|a| {
                             if a.name == name {
-                                ocel_attribute_val_to_any_value(&a.value, &utc_tz)
+                                ocel_attribute_val_to_any_value(&a.value)
                             } else {
                                 AnyValue::Null
                             }
@@ -285,7 +279,7 @@ pub fn ocel2_to_df(ocel: &OCEL) -> OCEL2DataFrames {
             })
             .chain(vec![
                 Series::from_any_values(
-                    OCEL_OBJECT_ID_KEY,
+                    OCEL_OBJECT_ID_KEY.into(),
                     &ocel
                         .objects
                         .iter()
@@ -296,7 +290,7 @@ pub fn ocel2_to_df(ocel: &OCEL) -> OCEL2DataFrames {
                 )
                 .unwrap(),
                 Series::from_any_values(
-                    OCEL_OBJECT_TYPE_KEY,
+                    OCEL_OBJECT_TYPE_KEY.into(),
                     &ocel
                         .objects
                         .iter()
@@ -307,7 +301,7 @@ pub fn ocel2_to_df(ocel: &OCEL) -> OCEL2DataFrames {
                 )
                 .unwrap(),
                 Series::from_any_values(
-                    OCEL_CHANGED_FIELD_KEY,
+                    OCEL_CHANGED_FIELD_KEY.into(),
                     &ocel
                         .objects
                         .iter()
@@ -323,7 +317,7 @@ pub fn ocel2_to_df(ocel: &OCEL) -> OCEL2DataFrames {
                 )
                 .unwrap(),
                 Series::from_any_values(
-                    OCEL_EVENT_TIMESTAMP_KEY,
+                    OCEL_EVENT_TIMESTAMP_KEY.into(),
                     &ocel
                         .objects
                         .iter()
@@ -337,7 +331,7 @@ pub fn ocel2_to_df(ocel: &OCEL) -> OCEL2DataFrames {
                             AnyValue::Datetime(
                                 date.timestamp_nanos_opt().unwrap(),
                                 TimeUnit::Nanoseconds,
-                                &utc_tz,
+                                &None,
                             )
                         })
                         .collect::<Vec<_>>(),
@@ -357,7 +351,7 @@ pub fn ocel2_to_df(ocel: &OCEL) -> OCEL2DataFrames {
             .into_iter()
             .map(|name| {
                 Series::from_any_values(
-                    &name,
+                    (&name).into(),
                     ocel.events
                         .iter()
                         .map(|e| {
@@ -366,7 +360,7 @@ pub fn ocel2_to_df(ocel: &OCEL) -> OCEL2DataFrames {
                                 Some(v) => &v.value,
                                 None => &OCELAttributeValue::Null,
                             };
-                            ocel_attribute_val_to_any_value(val, &utc_tz)
+                            ocel_attribute_val_to_any_value(val)
                         })
                         .collect::<Vec<_>>()
                         .as_ref(),
@@ -376,7 +370,7 @@ pub fn ocel2_to_df(ocel: &OCEL) -> OCEL2DataFrames {
             })
             .chain(vec![
                 Series::from_any_values(
-                    OCEL_EVENT_ID_KEY,
+                    OCEL_EVENT_ID_KEY.into(),
                     &ocel
                         .events
                         .iter()
@@ -386,7 +380,7 @@ pub fn ocel2_to_df(ocel: &OCEL) -> OCEL2DataFrames {
                 )
                 .unwrap(),
                 Series::from_any_values(
-                    OCEL_EVENT_TYPE_KEY,
+                    OCEL_EVENT_TYPE_KEY.into(),
                     &ocel
                         .events
                         .iter()
@@ -396,7 +390,7 @@ pub fn ocel2_to_df(ocel: &OCEL) -> OCEL2DataFrames {
                 )
                 .unwrap(),
                 Series::from_any_values(
-                    OCEL_EVENT_TIMESTAMP_KEY,
+                    OCEL_EVENT_TIMESTAMP_KEY.into(),
                     &ocel
                         .events
                         .iter()
@@ -404,7 +398,7 @@ pub fn ocel2_to_df(ocel: &OCEL) -> OCEL2DataFrames {
                             AnyValue::Datetime(
                                 o.time.timestamp_nanos_opt().unwrap(),
                                 TimeUnit::Nanoseconds,
-                                &utc_tz,
+                                &None,
                             )
                         })
                         .collect::<Vec<_>>(),
@@ -414,15 +408,15 @@ pub fn ocel2_to_df(ocel: &OCEL) -> OCEL2DataFrames {
             ]),
     );
     events_df
-        .sort_in_place(vec![OCEL_EVENT_TIMESTAMP_KEY], false, true)
+        .sort_in_place(vec![OCEL_EVENT_TIMESTAMP_KEY], SortMultipleOptions::default().with_maintain_order(true))
         .unwrap();
 
     e2o_df
-        .sort_in_place(vec![OCEL_EVENT_TIMESTAMP_KEY], false, true)
+        .sort_in_place(vec![OCEL_EVENT_TIMESTAMP_KEY], SortMultipleOptions::default().with_maintain_order(true))
         .unwrap();
 
     object_changes_df
-        .sort_in_place(vec![OCEL_EVENT_TIMESTAMP_KEY], false, true)
+        .sort_in_place(vec![OCEL_EVENT_TIMESTAMP_KEY], SortMultipleOptions::default().with_maintain_order(true))
         .unwrap();
     OCEL2DataFrames {
         objects: objects_df,
