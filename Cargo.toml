@@ -1,6 +1,6 @@
 [package]
 name = "rustxes"
-version = "0.2.5"
+version = "0.2.6"
 edition = "2021"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
@@ -9,7 +9,7 @@ name = "rustxes"
 crate-type = ["cdylib"]
 
 [dependencies]
-process_mining = {path = "../rust4pm/process_mining", features = ["dataframes"]}
+process_mining = {version = "0.3.19", features = ["dataframes"]}
 pyo3 = {version = "0.22.2", features = ["abi3-py311", "extension-module"]}
 polars = {version = "0.43.1", features = ["dtype-slim","timezones","partition_by","json","csv"]}
 pyo3-polars = {version = "0.17.0", features = ["dtype-struct"]}
