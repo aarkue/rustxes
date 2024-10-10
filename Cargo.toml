@@ -11,7 +11,7 @@ crate-type = ["cdylib"]
 [dependencies]
 process_mining = {version = "0.3.19", features = ["dataframes"]}
 pyo3 = {version = "0.22.2", features = ["abi3-py311", "extension-module"]}
-polars = {version = "0.43.1", features = ["dtype-slim","timezones","partition_by","json","csv"]}
+polars = {version = "0.43.1", features = ["dtype-slim","timezones","partition_by"]}
 pyo3-polars = {version = "0.17.0", features = ["dtype-struct"]}
 rayon = "1.7.0"
 chrono = {version = "0.4.34", features = ["serde"] }
