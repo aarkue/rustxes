@@ -21,7 +21,7 @@ fn ocel_attribute_val_to_any_value<'a>(
         OCELAttributeValue::Time(t) => AnyValue::Datetime(
             t.timestamp_nanos_opt().unwrap(),
             TimeUnit::Nanoseconds,
-            &None,
+            None,
         ),
         OCELAttributeValue::Integer(i) => AnyValue::Int64(*i),
         OCELAttributeValue::Float(f) => AnyValue::Float64(*f),
@@ -166,7 +166,7 @@ pub fn ocel2_to_df(ocel: &OCEL) -> OCEL2DataFrames {
                     AnyValue::Datetime(
                         e.time.timestamp_nanos_opt().unwrap(),
                         TimeUnit::Nanoseconds,
-                        &None,
+                        None,
                     )
                 })
                 .collect::<Vec<_>>(),
@@ -331,7 +331,7 @@ pub fn ocel2_to_df(ocel: &OCEL) -> OCEL2DataFrames {
                             AnyValue::Datetime(
                                 date.timestamp_nanos_opt().unwrap(),
                                 TimeUnit::Nanoseconds,
-                                &None,
+                                None,
                             )
                         })
                         .collect::<Vec<_>>(),
@@ -398,7 +398,7 @@ pub fn ocel2_to_df(ocel: &OCEL) -> OCEL2DataFrames {
                             AnyValue::Datetime(
                                 o.time.timestamp_nanos_opt().unwrap(),
                                 TimeUnit::Nanoseconds,
-                                &None,
+                                None,
                             )
                         })
                         .collect::<Vec<_>>(),
