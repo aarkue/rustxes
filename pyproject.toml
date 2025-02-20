@@ -5,7 +5,7 @@ build-backend = "maturin"
 [project]
 name = "rustxes"
 description = "Rust-based XES/OCEL2 event log importer"
-requires-python = ">=3.7"
+requires-python = ">=3.9"
 classifiers = [
     "Programming Language :: Rust",
     "Programming Language :: Python :: Implementation :: CPython",
