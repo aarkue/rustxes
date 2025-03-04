@@ -20,10 +20,28 @@ print(xes.shape)
 ```
 
 #### Options
-The following parameters can be passed to the `import_xes_rs` or the python wrapper:
+The following parameters can be passed to the `import_xes_rs` or the python wrapper (`import_xes`):
 - `path` - The filepath of the .xes or .xes.gz file to import
 - `date_format` - Optional date format to use for parsing `<date>` tags (See https://docs.rs/chrono/latest/chrono/format/strftime/index.html)
 - `print_debug` - Optional flag to enable debug print outputs
+
+
+### XES Export
+
+The `export_xes` exports the passed polars DataFrame to the given path (either `.xes` or `.xes.gz`).
+
+```python
+import rustxes
+
+[xes,log_attrs_json] = rustxes.import_xes("path/to/file.xes")
+rustxes.export_xes(xes,"path/to/export-file.xes")
+```
+
+#### Options
+The following parameters can be passed to the `export_xes_rs` or the python wrapper (`export_xes`):
+- `df` - The polars DataFrame representing the event log
+- `path` - The filepath the .xes or .xes.gz file should be written to
+
 
 
 ### OCEL Import

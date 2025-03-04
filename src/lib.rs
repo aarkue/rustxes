@@ -1,9 +1,10 @@
 use std::time::Instant;
 
 use process_mining::{
-    convert_log_to_dataframe, event_log::stream_xes::XESOuterLogData, import_xes_file, XESImportOptions
+    convert_dataframe_to_log, convert_log_to_dataframe, event_log::stream_xes::XESOuterLogData,
+    export_xes_event_log_to_file_path, import_xes_file, XESImportOptions,
 };
-use pyo3::prelude::*;
+use pyo3::{exceptions::PyTypeError, prelude::*};
 use pyo3_polars::PyDataFrame;
 
 use crate::ocel::{import_ocel_json_rs, import_ocel_xml_rs};
@@ -20,7 +21,7 @@ mod test;
 /// * `date_format` - Optional date format to use for parsing <date> tags (See https://docs.rs/chrono/latest/chrono/format/strftime/index.html)
 /// * `print_debug` - Optional flag to enable debug print outputs
 ///
-/// 
+///
 #[pyfunction]
 #[pyo3(signature = (path, date_format=None, print_debug=None))]
 fn import_xes_rs(
@@ -65,10 +66,22 @@ fn import_xes_rs(
     ))
 }
 
+#[pyfunction]
+// #[pyo3(signature = (df, path))]
+fn export_xes_rs(df: PyDataFrame, path: String) -> PyResult<()> {
+    let df: polars::frame::DataFrame = df.into();
+    let log = convert_dataframe_to_log(&df)
+        .map_err(|e| PyTypeError::new_err(format!("Failed to convert dataframe to log: {e:?}")))?;
+
+    export_xes_event_log_to_file_path(&log, path)
+        .map_err(|e| PyTypeError::new_err(format!("Failed to export XES: {e:?}")))
+}
+
 /// Python Module
 #[pymodule]
 fn rustxes(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(import_xes_rs, m)?)?;
+    m.add_function(wrap_pyfunction!(export_xes_rs, m)?)?;
     m.add_function(wrap_pyfunction!(import_ocel_xml_rs, m)?)?;
     m.add_function(wrap_pyfunction!(import_ocel_json_rs, m)?)?;
     Ok(())
