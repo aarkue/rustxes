@@ -5,6 +5,11 @@ build-backend = "maturin"
 [project]
 name = "rustxes"
 description = "Rust-based XES/OCEL2 event log importer"
+readme="README.md"
+authors = [
+  {name = "Aaron Küsters", email = "kuesters@pads.rwth-aachen.de"},
+]
+keywords = ["process-mining", "process", "mining", "OC-DECLARE", "object-centric", "DECLARE"]
 requires-python = ">=3.7"
 classifiers = [
     "Programming Language :: Rust",
